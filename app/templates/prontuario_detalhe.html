@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Prontuário #{{ prontuario.id }}{% endblock %}
+
+{% block content %}
+<h2>Prontuário da consulta #{{ prontuario.consulta_id }}</h2>
+<p>Paciente: {{ prontuario.paciente }}</p>
+<p>Profissional: {{ prontuario.profissional }}</p>
+<p>Diagnóstico: {{ prontuario.diagnostico }}</p>
+
+<h3>Anotações clínicas</h3>
+{# Exercício 9: sem |safe. As anotações são texto livre do profissional; o auto-escape
+   do Jinja2 (output encoding) neutraliza qualquer HTML. white-space:pre-line preserva
+   as quebras de linha sem precisar interpretar marcação. #}
+<div class="anotacoes" style="white-space:pre-line">{{ prontuario.anotacoes }}</div>
+
+{% if prontuario.prescricao %}
+<h3>Prescrição</h3>
+<p>{{ prontuario.prescricao }}</p>
+{% endif %}
+{% endblock %}

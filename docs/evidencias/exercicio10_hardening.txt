@@ -1,0 +1,50 @@
+# Exercício 10 — evidências reais (uvicorn app.main:app, curl)
+# Gerado em 2026-09-29 18:47. Servidor com o limite de login de produção (5/min).
+
+## 1. Cabeçalhos de segurança em toda resposta
+$ curl -s -D - -o /dev/null http://127.0.0.1:8000/pagina/login
+HTTP/1.1 200 OK
+strict-transport-security: max-age=31536000; includeSubDomains
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: no-referrer
+$ curl -s -D - -o /dev/null http://127.0.0.1:8000/   (também no JSON)
+strict-transport-security: max-age=31536000; includeSubDomains
+x-frame-options: DENY
+x-content-type-options: nosniff
+
+## 2. CORS com allowlist explícita (allowlist: http://localhost:5173, https://agendamento.exemplo.com.br)
+### 2.1 Origem autorizada → recebe access-control-allow-origin
+$ curl -s -D - -o /dev/null http://127.0.0.1:8000/ -H 'Origin: http://localhost:5173'
+HTTP/1.1 200 OK
+access-control-allow-credentials: true
+access-control-allow-origin: http://localhost:5173
+### 2.2 Origem não autorizada (GET simples) → 200, mas SEM access-control-allow-origin
+$ curl -s -D - -o /dev/null http://127.0.0.1:8000/ -H 'Origin: https://site-malicioso.com'
+HTTP/1.1 200 OK
+(a resposta NÃO traz access-control-allow-origin; sem ele o navegador da vítima nega a leitura ao JavaScript da página maliciosa)
+### 2.3 Preflight de origem não autorizada → 400, sem header
+$ curl -s -D - -o /dev/null -X OPTIONS http://127.0.0.1:8000/consultas -H 'Origin: https://site-malicioso.com' -H 'Access-Control-Request-Method: POST'
+HTTP/1.1 400 Bad Request
+access-control-allow-methods: DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, QUERY
+access-control-allow-credentials: true
+
+## 3. Rate limiting no login (5 tentativas / 60s por IP)
+$ for i in 1..8; do curl -s -o /dev/null -w '%{http_code} ' -X POST http://127.0.0.1:8000/token -d username=maria -d password=errada; done
+401 401 401 401 429 429 429 429 
+# O login bem-sucedido da preparação já consumiu 1 do limite (o contador vale para
+# qualquer tentativa, não só as que falham). Somadas: 1 + 4 = 5 em 401; da 6ª → 429.
+$ curl -s -D - -o /dev/null -X POST http://127.0.0.1:8000/token -d username=maria -d password=errada   (cabeçalho Retry-After na 429)
+HTTP/1.1 429 Too Many Requests
+retry-after: 59
+
+## 4. O limite é por IP, independe do resultado
+$ curl -s -X POST http://127.0.0.1:8000/token -d username=maria -d password=<senha correta>   (ainda bloqueado)
+{"detail":"Muitas tentativas. Tente novamente em instantes."}  → HTTP 429
+
+## 5. A listagem de consultas NÃO herda o limite baixo do login
+# (login não conta aqui: usa um token já emitido antes do teste de brute force)
+# 12 chamadas seguidas a GET /consultas do mesmo IP:
+$ for i in 1..12; do curl -s -o /dev/null -w '%{http_code} ' http://127.0.0.1:8000/consultas -H 'Authorization: Bearer <maria>'; done
+200 200 200 200 200 200 200 200 200 200 200 200 
+# Todas 200: a listagem tem o próprio limite (60/min), não o do login.

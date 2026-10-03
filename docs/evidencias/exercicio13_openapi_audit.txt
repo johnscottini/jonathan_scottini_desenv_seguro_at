@@ -1,0 +1,45 @@
+# Exercício 13 — auditoria da especificação OpenAPI
+# Gerado em 2026-09-29 19:13. openapi 3.1.0
+
+## Rotas x requisito de segurança declarado
+  GET    /                                          publica (por design)
+  GET    /admin/usuarios                            SEGURA  escopos=admin
+  POST   /admin/usuarios                            SEGURA  escopos=admin
+  GET    /consultas                                 SEGURA  escopos=consultas:read
+  POST   /consultas                                 SEGURA  escopos=consultas:write
+  GET    /consultas/{consulta_id}                   SEGURA  escopos=consultas:read
+  PUT    /consultas/{consulta_id}                   SEGURA  escopos=consultas:write
+  DELETE /consultas/{consulta_id}                   SEGURA  escopos=consultas:write
+  POST   /consultas/{consulta_id}/prontuario        SEGURA  escopos=consultas:write
+  GET    /consultas/{consulta_id}/resultados        SEGURA  escopos=consultas:read
+  GET    /laboratorio/pedidos                       SEGURA  escopos=exames:read
+  POST   /laboratorio/pedidos/{consulta_id}/resultados SEGURA  escopos=exames:write
+  GET    /pagina/consultas                          sessao por cookie (protegida em runtime; ver relatório)
+  GET    /pagina/consultas/{consulta_id}            sessao por cookie (protegida em runtime; ver relatório)
+  GET    /pagina/login                              publica (por design)
+  POST   /pagina/login                              publica (por design)
+  POST   /pagina/login/mfa                          publica (por design)
+  POST   /pagina/logout                             publica (por design)
+  GET    /pagina/prontuarios/{prontuario_id}        sessao por cookie (protegida em runtime; ver relatório)
+  GET    /prontuarios/busca                         SEGURA  escopos=consultas:read
+  GET    /prontuarios/{prontuario_id}               SEGURA  escopos=consultas:read
+  PUT    /prontuarios/{prontuario_id}               SEGURA  escopos=consultas:write
+  POST   /token                                     publica (por design)
+  POST   /token/m2m                                 publica (por design)
+  POST   /token/mfa                                 publica (por design)
+  POST   /usuarios                                  publica (por design)
+
+## Schemas de resposta x campos internos
+  ConsultaResponse           ok — só campos públicos
+  PedidoExameResponse        ok — só campos públicos
+  ProntuarioResponse         ok — só campos públicos
+  ResultadoExameResponse     ok — só campos públicos
+  UsuarioResponse            ok — só campos públicos
+
+## Esquema de segurança declarado
+  OAuth2PasswordBearer: type=oauth2 flows=password
+    - consultas:read: Ler consultas (as próprias, ou as dos próprios pacientes)
+    - consultas:write: Criar e gerenciar consultas dos próprios pacientes
+    - admin: Operações administrativas
+    - exames:read: Laboratório: ler pedidos de exame
+    - exames:write: Laboratório: enviar resultados de exame

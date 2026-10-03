@@ -1,0 +1,40 @@
+# Exercício 9 — evidências reais (código DEPOIS da correção)
+# Gerado em 2026-09-29 18:45. Mesmo cenário e mesmos ataques do Exercício 8.
+
+## V1 — BOLA corrigido (GET /prontuarios/{id})
+$ curl -s http://127.0.0.1:8000/prontuarios/2 -H 'Authorization: Bearer <maria>'   (prontuário do João)
+{"detail":"Recurso não encontrado"}  → HTTP 404
+$ curl -s http://127.0.0.1:8000/prontuarios/999 -H 'Authorization: Bearer <maria>'   (inexistente: resposta idêntica)
+{"detail":"Recurso não encontrado"}  → HTTP 404
+$ curl -s http://127.0.0.1:8000/prontuarios/1 -H 'Authorization: Bearer <maria, dona>'   (dona continua acessando)
+{"id":1,"consulta_id":1,"paciente":"Maria Souza","profissional":"Dra. Ana Costa","diagnostico":"Angina estável","anotacoes":"Dor torácica aos esforços há 2 meses. ECG sem alterações agudas.","prescricao":"AAS 100 mg/dia","criado_em":"2026-09-29T21:45:53.107297Z","atualizado_em":null}  → HTTP 200
+
+## V2 — SQL Injection corrigido (GET /prontuarios/busca)
+$ curl -s -G http://127.0.0.1:8000/prontuarios/busca --data-urlencode "termo=%' OR 1=1 --" -H 'Authorization: Bearer <maria>'
+{"detail":[{"type":"string_pattern_mismatch","loc":["query","termo"],"msg":"String should match pattern '^[A-Za-zÀ-ÖØ-öø-ÿ0-9 \\-]+$'","input":"%' OR 1=1 --","ctx":{"pattern":"^[A-Za-zÀ-ÖØ-ö
+$ curl -s -G http://127.0.0.1:8000/prontuarios/busca --data-urlencode "termo=O'Brien" -H 'Authorization: Bearer <maria>'   (aspa: barrada, sem 500)
+{"detail":[{"type":"string_pattern_mismatch","loc":["query","termo"],"msg":"String should match pattern '^[A-Za-zÀ-ÖØ-öø-ÿ0-9 \\-]+$'","input":"O'Brien","ctx":{"pattern":"^[A-Za-zÀ-ÖØ-öø-ÿ
+$ curl -s -G http://127.0.0.1:8000/prontuarios/busca --data-urlencode 'termo=Angina' -H 'Authorization: Bearer <maria>'   (busca legítima)
+diagnosticos: ['Angina estável']
+
+## V3 — XSS armazenado corrigido (/pagina/prontuarios/{id})
+$ curl -s -X PUT http://127.0.0.1:8000/prontuarios/1 -H 'Authorization: Bearer <dra.ana>' -d '{"anotacoes":"<script>document.title=\"XSS\"</script>Evolução estável."}'
+  → HTTP 200
+$ curl -s http://127.0.0.1:8000/pagina/prontuarios/1 -b 'sessao=<maria>' | grep anotacoes
+<div class="anotacoes" style="white-space:pre-line">&lt;script&gt;document.title=&#34;XSS&#34;&lt;/script&gt;Evolução estável.</div>
+# O <script> saiu como texto escapado (&lt;script&gt;), não como tag executável.
+
+## V4 — Mass assignment corrigido (PUT /prontuarios/{id})
+$ curl -s -X PUT http://127.0.0.1:8000/prontuarios/1 -H 'Authorization: Bearer <dra.ana>' -d '{"prescricao":"AAS 100 mg/dia","criado_em":"2024-03-01T09:00:00+00:00","profissional":"Dr. Paulo Lima"}'
+{"detail":[{"type":"extra_forbidden","loc":["body","criado_em"],"msg":"Extra inputs are not permitted","input":"2024-03-01T09:00:00+00:00"},{"type":"extra_forbidden","loc":["body","profissional"],"msg":"Extra inputs are not permitted","input":"Dr. Paulo Lima"}]}  → HTTP 422
+# Campo não declarado é rejeitado com 422 extra_forbidden; criado_em e autoria intactos.
+
+## Endpoint não citado no Ex. 8, mesmo padrão de BOLA: PUT /prontuarios/{id}
+$ curl -s -X PUT http://127.0.0.1:8000/prontuarios/1 -H 'Authorization: Bearer <dr.paulo, outro profissional>' -d '{"prescricao":"alterado"}'
+{"detail":"Recurso não encontrado"}  → HTTP 404
+
+## V3 — verificação no navegador (painel do Claude Desktop, JS executado na página)
+# Logado como maria, aberto GET /pagina/prontuarios/1 com o mesmo payload do Exercício 8:
+{"titulo_da_aba": "Prontuário #1", "scripts_injetados_no_conteudo": 0,
+ "anotacoes_como_texto": "<script>document.title=\"XSS\"</script>Evolução estável."}
+# O título NÃO mudou e não há <script> no DOM: o payload é exibido como texto literal.

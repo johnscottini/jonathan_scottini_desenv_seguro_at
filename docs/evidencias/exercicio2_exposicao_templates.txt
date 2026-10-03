@@ -1,0 +1,119 @@
+# Exercício 2 — evidências reais
+# Gerado em 2026-09-27 15:33
+
+## 1. response_model: mesma função de dados, com e sem filtro
+$ PYTHONPATH=. ./venv/bin/python docs/evidencias/comparar_response_model.py
+COM response_model=ConsultaResponse:
+{"id": 1, "paciente": "Maria Souza", "medico": "Dr. Paulo Lima", "especialidade": "Cardiologia", "data_hora": "2026-10-04T09:30:00", "motivo": "Retorno para avaliação de exames", "status": "agendada"}
+
+SEM response_model:
+{"id": 2, "paciente": "Maria Souza", "medico": "Dr. Paulo Lima", "especialidade": "Cardiologia", "data_hora": "2026-10-04T09:30:00", "motivo": "Retorno para avaliação de exames", "status": "agendada", "prontuario_paciente": 279169, "audit_token": "bed94b1a15ff74f3", "audit_origem_ip": "testclient", "audit_criado_em": "2026-09-27T18:33:52.897239+00:00"}
+
+## 2. XSS armazenado no campo motivo (servidor real: uvicorn app.main:app)
+$ curl -s -X POST localhost:8000/consultas -H 'Content-Type: application/json' -d '{"paciente":"Carlos Mendes","medico":"Dr. Paulo Lima","especialidade":"Cardiologia","data_hora":"2026-10-04T14:00:00","motivo":"<script>document.title=\"XSS-EXECUTADO\"</script>"}'
+{"id":3,"paciente":"Carlos Mendes","medico":"Dr. Paulo Lima","especialidade":"Cardiologia","data_hora":"2026-10-04T14:00:00","motivo":"<script>document.title=\"XSS-EXECUTADO\"</script>","status":"agendada"}
+
+# A API JSON devolve o texto como foi salvo (JSON não é interpretado pelo navegador como HTML).
+# O escape acontece na saída HTML:
+$ curl -s localhost:8000/pagina/consultas/3
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Consulta #3</title>
+</head>
+<body>
+    <header>
+        <h1>agendamento-api</h1>
+        <nav><a href="/pagina/consultas">Consultas agendadas</a></nav>
+    </header>
+
+    <main>
+        
+<h2>Consulta #3</h2>
+<p>Paciente: Carlos Mendes</p>
+<p>Médico: Dr. Paulo Lima (Cardiologia)</p>
+<p>Data e hora: 04/10/2026 14:00</p>
+<p>Status: agendada</p>
+
+<h3>Motivo da consulta</h3>
+
+<p>&lt;script&gt;document.title=&#34;XSS-EXECUTADO&#34;&lt;/script&gt;</p>
+
+    </main>
+
+    <footer>
+        <p>agendamento-api — painel interno da clínica</p>
+    </footer>
+</body>
+</html>
+## 3. Página de lista (herança de base.html)
+$ curl -s localhost:8000/pagina/consultas
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Consultas</title>
+</head>
+<body>
+    <header>
+        <h1>agendamento-api</h1>
+        <nav><a href="/pagina/consultas">Consultas agendadas</a></nav>
+    </header>
+
+    <main>
+        
+<h2>Consultas agendadas</h2>
+<table>
+    <thead>
+        <tr><th>Paciente</th><th>Médico</th><th>Especialidade</th><th>Data e hora</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+        
+        <tr>
+            <td><a href="/pagina/consultas/1">Maria Souza</a></td>
+            <td>Dr. Paulo Lima</td>
+            <td>Cardiologia</td>
+            <td>04/10/2026 09:30</td>
+            <td>agendada</td>
+        </tr>
+        
+        <tr>
+            <td><a href="/pagina/consultas/3">Carlos Mendes</a></td>
+            <td>Dr. Paulo Lima</td>
+            <td>Cardiologia</td>
+            <td>04/10/2026 14:00</td>
+            <td>agendada</td>
+        </tr>
+        
+    </tbody>
+</table>
+
+    </main>
+
+    <footer>
+        <p>agendamento-api — painel interno da clínica</p>
+    </footer>
+</body>
+</html>
+## 4. Verificação no navegador (painel de navegador do Claude Desktop, JS executado na página)
+
+### 4.1 ANTES — versão vulnerável temporária, com {{ consulta.motivo|safe }} em consulta_detalhe.html
+$ curl -s localhost:8000/pagina/consultas/3 | sed -n '/Motivo/,/main>/p'
+<h3>Motivo da consulta</h3>
+
+<p><script>document.title="XSS-EXECUTADO"</script></p>
+
+    </main>
+
+Navegador (document.title / scripts dentro de <main> / texto visível do motivo):
+{"title": "XSS-EXECUTADO", "scripts_no_main": 1, "motivo_visivel": ""}
+→ o título da aba mudou: o comentário foi executado como código, e o motivo aparece vazio na tela.
+
+### 4.2 DEPOIS — versão entregue, {{ consulta.motivo }} com auto-escape
+$ curl -s localhost:8000/pagina/consultas/3 | grep XSS
+<p>&lt;script&gt;document.title=&#34;XSS-EXECUTADO&#34;&lt;/script&gt;</p>
+
+Navegador:
+{"title": "Consulta #3", "scripts_no_main": 0, "motivo_renderizado": "<script>document.title=\"XSS-EXECUTADO\"</script>"}
+→ nenhum <script> no DOM, o título não muda e o payload aparece como texto literal.

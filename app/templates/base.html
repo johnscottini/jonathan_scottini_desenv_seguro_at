@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}agendamento-api{% endblock %}</title>
+</head>
+<body>
+    <header>
+        <h1>agendamento-api</h1>
+        {% if usuario %}
+        <nav>
+            <a href="/pagina/consultas">Consultas</a>
+            <form method="post" action="/pagina/logout" style="display:inline">
+                <button type="submit">Sair</button>
+            </form>
+        </nav>
+        {% endif %}
+    </header>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>agendamento-api — painel interno da clínica</p>
+    </footer>
+</body>
+</html>

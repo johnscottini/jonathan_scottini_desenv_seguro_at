@@ -1,0 +1,29 @@
+# Exercício 13 — OWASP ZAP, scan passivo (baseline)
+# Ferramenta: ghcr.io/zaproxy/zaproxy:stable, comando zap-baseline.py (só regras passivas).
+# Alvo: http://host.docker.internal:8000 (a aplicação subindo via uvicorn app.main:app).
+# Relatório HTML completo em exercicio13_zap_relatorio.html; JSON em exercicio13_zap_depois.json.
+
+## ANTES (SecurityHeadersMiddleware com HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy)
+FAIL-NEW: 0   WARN-NEW: 2   PASS: 65
+Alertas:
+  - Low (Medium)           | Cross-Origin-Resource-Policy Header Missing or Invalid  [90004]
+  - Informational (Medium) | Storable and Cacheable Content                          [10049]
+
+## Correção aplicada (app/middleware.py)
+  + Cross-Origin-Resource-Policy: same-origin   (fecha o [90004])
+  + Cache-Control: no-store                     (dado de saúde não deve ser cacheado)
+
+## DEPOIS
+FAIL-NEW: 0   WARN-NEW: 1   PASS: 66
+Alertas:
+  - Informational (Medium) | Non-Storable Content [10049]
+    → não é vulnerabilidade: o ZAP apenas registra que o conteúdo passou a ser não-cacheável,
+      confirmando que o Cache-Control: no-store está em vigor. Nenhum finding de segurança resta.
+
+## Observações
+- O scan passivo não injeta payloads (não há ataque ativo); analisa só as respostas HTTP.
+- A cobertura do spider foi a raiz e /robots.txt (a raiz é JSON, sem links a seguir). O restante
+  da superfície de API é auditado pela especificação OpenAPI (exercicio13_openapi_audit.txt) e
+  pelos 121 testes automatizados.
+- Os 65+ PASS incluem checagens relevantes ao domínio: CSP, Cookie sem SameSite, Cross-Domain
+  Misconfiguration, PII Disclosure, Session ID in URL, Anti-CSRF Tokens — todos PASS.

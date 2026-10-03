@@ -1,0 +1,89 @@
+# Exercício 1 — evidências reais (uvicorn app.main:app, curl)
+# Gerado em 2026-09-27 15:33
+
+## Ambiente isolado
+$ ./venv/bin/python --version
+Python 3.12.14
+$ ./venv/bin/python -c "import sys; print(sys.prefix)"
+~/projetos/estudo/desenv-seguro-app-web-at/venv
+
+## GET / (health check)
+$ curl -s -i localhost:8000/
+HTTP/1.1 200 OK
+date: Sun, 27 Sep 2026 18:33:11 GMT
+server: uvicorn
+content-length: 43
+content-type: application/json
+
+{"status":"ok","servico":"agendamento-api"}
+
+## POST /consultas
+$ curl -s -i -X POST localhost:8000/consultas -H 'Content-Type: application/json' -d '{"paciente":"Maria Souza","medico":"Dr. Paulo Lima","especialidade":"Cardiologia","data_hora":"2026-10-04T09:30:00","motivo":"Retorno para avaliação de exames"}'
+HTTP/1.1 201 Created
+date: Sun, 27 Sep 2026 18:33:11 GMT
+server: uvicorn
+content-length: 189
+content-type: application/json
+
+{"id":1,"paciente":"Maria Souza","medico":"Dr. Paulo Lima","especialidade":"Cardiologia","data_hora":"2026-10-04T09:30:00","motivo":"Retorno para avaliação de exames","status":"agendada"}
+
+$ curl -s -X POST localhost:8000/consultas ... (segunda consulta)
+{"id":2,"paciente":"João Pereira","medico":"Dra. Ana Costa","especialidade":"Dermatologia","data_hora":"2026-10-04T09:30:00","motivo":"Avaliação de lesão na pele","status":"agendada"}
+
+## GET /consultas
+$ curl -s localhost:8000/consultas
+[{"id":1,"paciente":"Maria Souza","medico":"Dr. Paulo Lima","especialidade":"Cardiologia","data_hora":"2026-10-04T09:30:00","motivo":"Retorno para avaliação de exames","status":"agendada"},{"id":2,"paciente":"João Pereira","medico":"Dra. Ana Costa","especialidade":"Dermatologia","data_hora":"2026-10-04T09:30:00","motivo":"Avaliação de lesão na pele","status":"agendada"}]
+
+## GET /consultas/1
+$ curl -s -i localhost:8000/consultas/1
+HTTP/1.1 200 OK
+date: Sun, 27 Sep 2026 18:33:11 GMT
+server: uvicorn
+content-length: 189
+content-type: application/json
+
+{"id":1,"paciente":"Maria Souza","medico":"Dr. Paulo Lima","especialidade":"Cardiologia","data_hora":"2026-10-04T09:30:00","motivo":"Retorno para avaliação de exames","status":"agendada"}
+
+## PUT /consultas/2 (cancelamento)
+$ curl -s -X PUT localhost:8000/consultas/2 -H 'Content-Type: application/json' -d '{"status":"cancelada"}'
+{"id":2,"paciente":"João Pereira","medico":"Dra. Ana Costa","especialidade":"Dermatologia","data_hora":"2026-10-04T09:30:00","motivo":"Avaliação de lesão na pele","status":"cancelada"}
+
+## DELETE /consultas/2
+$ curl -s -o /dev/null -w "%{http_code}\n" -X DELETE localhost:8000/consultas/2
+204
+$ curl -s -i localhost:8000/consultas/2
+HTTP/1.1 404 Not Found
+date: Sun, 27 Sep 2026 18:33:11 GMT
+server: uvicorn
+content-length: 37
+content-type: application/json
+
+{"detail":"Consulta não encontrada"}
+
+## Validação: data no passado → 422
+$ curl -s -X POST localhost:8000/consultas ... "data_hora":"2026-09-26T09:30:00"
+{"detail":[{"type":"value_error","loc":["body","data_hora"],"msg":"Value error, a consulta precisa ser agendada para uma data futura","input":"2026-09-26T09:30:00","ctx":{"error":{}}}]}
+HTTP 422
+
+## Validação: id não inteiro → 422
+$ curl -s localhost:8000/consultas/abc
+{"detail":[{"type":"int_parsing","loc":["path","consulta_id"],"msg":"Input should be a valid integer, unable to parse string as an integer","input":"abc"}]}
+HTTP 422
+
+## pytest
+$ ./venv/bin/pytest -v
+tests/test_consultas.py::test_health_check PASSED                        [  7%]
+tests/test_consultas.py::test_criar_consulta PASSED                      [ 14%]
+tests/test_consultas.py::test_listar_consultas PASSED                    [ 21%]
+tests/test_consultas.py::test_obter_consulta_por_id PASSED               [ 28%]
+tests/test_consultas.py::test_atualizar_consulta PASSED                  [ 35%]
+tests/test_consultas.py::test_remover_consulta PASSED                    [ 42%]
+tests/test_consultas.py::test_consulta_inexistente_retorna_404 PASSED    [ 50%]
+tests/test_consultas.py::test_rejeita_data_no_passado PASSED             [ 57%]
+tests/test_consultas.py::test_rejeita_campo_extra PASSED                 [ 64%]
+tests/test_consultas.py::test_resposta_expoe_somente_campos_publicos PASSED [ 71%]
+tests/test_consultas.py::test_campos_internos_existem_no_armazenamento_mas_nao_na_resposta PASSED [ 78%]
+tests/test_consultas.py::test_pagina_lista_usa_template_base PASSED      [ 85%]
+tests/test_consultas.py::test_pagina_detalhe_escapa_xss_no_motivo PASSED [ 92%]
+tests/test_consultas.py::test_pagina_detalhe_nao_exibe_campos_internos PASSED [100%]
+============================== 14 passed in 0.04s ==============================

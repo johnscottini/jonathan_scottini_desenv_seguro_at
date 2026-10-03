@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Consulta #{{ consulta.id }}{% endblock %}
+
+{% block content %}
+<h2>Consulta #{{ consulta.id }}</h2>
+<p>Paciente: {{ consulta.paciente }}</p>
+<p>Profissional: {{ consulta.profissional }} ({{ consulta.especialidade }})</p>
+<p>Data e hora: {{ consulta.data_hora.strftime("%d/%m/%Y %H:%M") }}</p>
+<p>Status: {{ consulta.status.value }}</p>
+
+<h3>Motivo da consulta</h3>
+{# Exercício 2: texto livre informado no agendamento. Sem |safe, o auto-escape do
+   Jinja2 exibe qualquer HTML como texto em vez de executá-lo. Os campos internos
+   (ids dos donos, prontuário, audit_*) nunca são referenciados neste template. #}
+<p>{{ consulta.motivo }}</p>
+
+{% if prontuario %}
+<p><a href="/pagina/prontuarios/{{ prontuario.id }}">Ver prontuário</a></p>
+{% endif %}
+{% endblock %}

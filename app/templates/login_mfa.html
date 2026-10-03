@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Segundo fator{% endblock %}
+
+{% block content %}
+<h2>Segundo fator</h2>
+<p>{{ desafio.mensagem }}</p>
+{# Simulação do TP: em produção o código viria de um app autenticador (TOTP). #}
+<p>Código simulado: <code>{{ desafio.codigo_simulado }}</code></p>
+<form method="post" action="/pagina/login/mfa">
+    <input type="hidden" name="mfa_token" value="{{ desafio.mfa_token }}">
+    <label>Código <input type="text" name="codigo" inputmode="numeric" maxlength="6" required autocomplete="one-time-code"></label>
+    <button type="submit">Confirmar</button>
+</form>
+{% endblock %}

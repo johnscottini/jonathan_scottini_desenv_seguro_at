@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Consultas{% endblock %}
+
+{% block content %}
+<h2>Consultas agendadas</h2>
+<table>
+    <thead>
+        <tr><th>Paciente</th><th>Profissional</th><th>Especialidade</th><th>Data e hora</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+        {% for consulta in consultas %}
+        <tr>
+            <td><a href="/pagina/consultas/{{ consulta.id }}">{{ consulta.paciente }}</a></td>
+            <td>{{ consulta.profissional }}</td>
+            <td>{{ consulta.especialidade }}</td>
+            <td>{{ consulta.data_hora.strftime("%d/%m/%Y %H:%M") }}</td>
+            <td>{{ consulta.status.value }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">Nenhuma consulta.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

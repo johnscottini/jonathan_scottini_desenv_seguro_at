@@ -1,0 +1,653 @@
+{
+  "info": {
+    "name": "agendamento-api — demo 5 min",
+    "description": "Demo do AT de Desenvolvimento Seguro de Aplicacoes Web.\n\nCOMO USAR\n1. Selecionar o environment 'agendamento-api (local)' no canto superior direito.\n2. Rodar a pasta 'Setup' inteira ANTES de apresentar (botao ... > Run folder). Ela cria os usuarios e guarda os tokens. Nao faz parte dos 5 minutos.\n3. Apresentar clicando Send nas pastas 1 a 5, de cima para baixo.\n\nCada login guarda o proprio token numa variavel de collection, entao nao se copia JWT nenhum durante a demo.\n\nAs pastas 3 e 5 esperam ERRO (404/403). O teste delas fica verde justamente quando o acesso e negado.\n\nA pasta 'Extras' nao entra no roteiro: fica para arguicao ou se sobrar tempo.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "mfaToken", "value": "" },
+    { "key": "mfaCodigo", "value": "" },
+    { "key": "tokenAdmin", "value": "" },
+    { "key": "tokenAna", "value": "" },
+    { "key": "tokenMaria", "value": "" },
+    { "key": "tokenJoao", "value": "" },
+    { "key": "tokenLab", "value": "" },
+    { "key": "consultaId", "value": "" },
+    { "key": "dataFutura", "value": "" },
+    { "key": "corpo404", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Setup — rodar ANTES, fora do cronometro",
+      "description": "Run folder. Cria dra.ana (profissional), maria e joao (pacientes) e faz o login dos tres. E encanamento, nao conteudo de apresentacao.",
+      "item": [
+        {
+          "name": "S1 POST /token + /token/mfa — admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 - senha do admin aceita', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('mfaToken', d.mfa_token);",
+                  "pm.collectionVariables.set('mfaCodigo', d.codigo_simulado);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "text" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/token", "host": ["{{baseUrl}}"], "path": ["token"] },
+            "description": "Login do admin so para criar os usuarios do setup. A versao narrada deste fluxo esta na pasta 1."
+          }
+        },
+        {
+          "name": "S2 POST /token/mfa — token do admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 - admin autenticado', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('tokenAdmin', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "mfa_token", "value": "{{mfaToken}}", "type": "text" },
+                { "key": "codigo", "value": "{{mfaCodigo}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/token/mfa", "host": ["{{baseUrl}}"], "path": ["token", "mfa"] }
+          }
+        },
+        {
+          "name": "S3 POST /admin/usuarios — dra.ana (profissional)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 criado (ou 409 se ja existe)', () => {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"dra.ana\",\n  \"nome\": \"Dra. Ana Costa\",\n  \"password\": \"{{senhaPadrao}}\",\n  \"papel\": \"profissional\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/admin/usuarios", "host": ["{{baseUrl}}"], "path": ["admin", "usuarios"] },
+            "description": "O campo 'papel' so existe nesta rota. O cadastro publico (POST /usuarios) nao tem esse campo no schema, entao nao da para se autopromover pela rota aberta. Vale como resposta de arguicao."
+          }
+        },
+        {
+          "name": "S4 POST /admin/usuarios — maria (paciente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 criado (ou 409 se ja existe)', () => {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"maria\",\n  \"nome\": \"Maria Souza\",\n  \"password\": \"{{senhaPadrao}}\",\n  \"papel\": \"paciente\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/admin/usuarios", "host": ["{{baseUrl}}"], "path": ["admin", "usuarios"] }
+          }
+        },
+        {
+          "name": "S5 POST /admin/usuarios — joao (o intruso da pasta 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 criado (ou 409 se ja existe)', () => {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAdmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"joao\",\n  \"nome\": \"Joao Pereira\",\n  \"password\": \"{{senhaPadrao}}\",\n  \"papel\": \"paciente\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/admin/usuarios", "host": ["{{baseUrl}}"], "path": ["admin", "usuarios"] }
+          }
+        },
+        {
+          "name": "S6 POST /token — login dra.ana",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 - token da profissional', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('tokenAna', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "dra.ana", "type": "text" },
+                { "key": "password", "value": "{{senhaPadrao}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/token", "host": ["{{baseUrl}}"], "path": ["token"] }
+          }
+        },
+        {
+          "name": "S7 POST /token — login maria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 - token da paciente dona', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('tokenMaria', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "maria", "type": "text" },
+                { "key": "password", "value": "{{senhaPadrao}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/token", "host": ["{{baseUrl}}"], "path": ["token"] }
+          }
+        },
+        {
+          "name": "S8 POST /token — login joao",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 - token do outro paciente', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('tokenJoao', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "joao", "type": "text" },
+                { "key": "password", "value": "{{senhaPadrao}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/token", "host": ["{{baseUrl}}"], "path": ["token"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Login do admin exige 2o fator (0:00)",
+      "item": [
+        {
+          "name": "1.1 POST /token — senha certa, e nenhum token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 - senha aceita', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "",
+                  "pm.test('admin NAO recebe access_token so com a senha', () => {",
+                  "  pm.expect(d).to.have.property('mfa_requerido', true);",
+                  "  pm.expect(d).to.not.have.property('access_token');",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('mfaToken', d.mfa_token);",
+                  "pm.collectionVariables.set('mfaCodigo', d.codigo_simulado);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "text" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/token", "host": ["{{baseUrl}}"], "path": ["token"] },
+            "description": "APONTAR: a resposta tem mfa_requerido e mfa_token, mas NENHUM access_token. Senha correta sozinha nao abre a conta administrativa.\n\nO codigo_simulado so aparece porque o 2o fator e simulado no AT; em producao viria por app autenticador."
+          }
+        },
+        {
+          "name": "1.2 POST /token/mfa — agora sim o token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 - token emitido apos o 2o fator', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('agora existe access_token', () => pm.expect(d).to.have.property('access_token'));",
+                  "pm.collectionVariables.set('tokenAdmin', d.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "mfa_token", "value": "{{mfaToken}}", "type": "text" },
+                { "key": "codigo", "value": "{{mfaCodigo}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/token/mfa", "host": ["{{baseUrl}}"], "path": ["token", "mfa"] },
+            "description": "APONTAR: o escopo 'admin' so existe em token emitido depois do MFA."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Agendar e ler a consulta (1:00)",
+      "item": [
+        {
+          "name": "2.1 POST /consultas — dra.ana agenda para maria",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// data_hora precisa ser futura (app/models/consulta.py:18).",
+                  "// Calculada na hora para o roteiro nao vencer com o tempo.",
+                  "const d = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);",
+                  "pm.collectionVariables.set('dataFutura', d.toISOString().slice(0, 19));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 - consulta agendada', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('consultaId', d.id);",
+                  "",
+                  "pm.test('response_model nao vaza campo interno nenhum', () => {",
+                  "  ['paciente_id', 'profissional_id', 'prontuario_paciente',",
+                  "   'audit_token', 'audit_origem_ip', 'audit_criado_em'",
+                  "  ].forEach(campo => pm.expect(d).to.not.have.property(campo));",
+                  "});",
+                  "",
+                  "pm.test('o profissional veio do token, nao do corpo', () => {",
+                  "  pm.expect(d.profissional).to.eql('Dra. Ana Costa');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAna}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paciente\": \"maria\",\n  \"especialidade\": \"Cardiologia\",\n  \"data_hora\": \"{{dataFutura}}\",\n  \"motivo\": \"Dor no peito aos esforcos\",\n  \"exames_solicitados\": [\"Hemograma completo\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/consultas", "host": ["{{baseUrl}}"], "path": ["consultas"] },
+            "description": "APONTAR duas coisas na resposta:\n1. Nao enviei 'profissional' no corpo — ele vem do token. Um profissional nao agenda em nome de outro.\n2. A tabela guarda paciente_id, profissional_id, audit_token e audit_origem_ip. A resposta tem 8 campos e nenhum deles aparece, porque o ConsultaResponse nao os declara.\n\nexames_solicitados e o que o laboratorio enxerga na pasta 4 — sem ele, aquela lista volta vazia."
+          }
+        },
+        {
+          "name": "2.2 GET /consultas/{id} — como MARIA, a dona",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 - a dona le a propria consulta', () => pm.response.to.have.status(200));",
+                  "pm.test('e a consulta certa', () => {",
+                  "  pm.expect(pm.response.json().paciente).to.eql('Maria Souza');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenMaria}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/consultas/{{consultaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["consultas", "{{consultaId}}"]
+            },
+            "description": "DIZER: guardem esta tela. Daqui a pouco eu chamo exatamente esta URL, com exatamente este id, e a unica coisa diferente vai ser o token."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. NEGA — outro paciente, mesma URL (2:00)",
+      "item": [
+        {
+          "name": "3.1 GET /consultas/{id} — como JOAO -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 - BOLA bloqueado', () => pm.response.to.have.status(404));",
+                  "pm.test('a mensagem nao confirma que a consulta existe', () => {",
+                  "  pm.expect(pm.response.json().detail).to.include('não encontrado');",
+                  "});",
+                  "pm.collectionVariables.set('corpo404', pm.response.text());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenJoao}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/consultas/{{consultaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["consultas", "{{consultaId}}"]
+            },
+            "description": "MESMA URL da pasta 2, MESMO id, token diferente.\n\nAPONTAR: o joao TEM o escopo consultas:read. O token dele e valido e o escopo e suficiente. Quem barrou foi a checagem de dono (autorizar_dono, app/security.py:168)."
+          }
+        },
+        {
+          "name": "3.2 GET /consultas/999999 — id que nao existe -> MESMO 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 - mesmo status do recurso alheio', () => pm.response.to.have.status(404));",
+                  "pm.test('resposta byte a byte identica a anterior', () => {",
+                  "  pm.expect(pm.response.text()).to.eql(pm.collectionVariables.get('corpo404'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenJoao}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/consultas/999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["consultas", "999999"]
+            },
+            "description": "A PROVA, e o ponto alto da apresentacao. Nao corra.\n\nE 404 e nao 403 de proposito: responder 'proibido' ja confirmaria que existe uma consulta com esse id. Como consulta alheia e consulta inexistente devolvem respostas identicas, nao da para varrer os ids e descobrir quem tem consulta marcada — seria vazamento de dado de saude sem ler nenhum prontuario.\n\nO teste desta request compara o corpo com o da anterior: o check verde E a prova."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Laboratorio parceiro — M2M (3:00)",
+      "item": [
+        {
+          "name": "4.1 POST /token/m2m — client credentials",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 - token do parceiro emitido', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('tokenLab', d.access_token);",
+                  "",
+                  "pm.test('o escopo e so de exames, nunca de consultas', () => {",
+                  "  pm.expect(d.scope).to.include('exames:');",
+                  "  pm.expect(d.scope).to.not.include('consultas:');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "client_credentials", "type": "text" },
+                { "key": "client_id", "value": "{{labClientId}}", "type": "text" },
+                { "key": "client_secret", "value": "{{labClientSecret}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/token/m2m", "host": ["{{baseUrl}}"], "path": ["token", "m2m"] },
+            "description": "OAuth 2.0 Client Credentials: nao ha usuario, nao ha senha de pessoa, nao ha MFA. E um sistema se autenticando como sistema.\n\nAPONTAR: o campo scope da resposta — 'exames:read exames:write'. Nenhum escopo de consultas."
+          }
+        },
+        {
+          "name": "4.2 GET /laboratorio/pedidos — dentro do contrato",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 - o parceiro ve os pedidos de exame', () => pm.response.to.have.status(200));",
+                  "const pedidos = pm.response.json();",
+                  "pm.test('tem pelo menos um pedido', () => pm.expect(pedidos.length).to.be.above(0));",
+                  "",
+                  "pm.test('minimizacao: nenhum dado clinico no payload', () => {",
+                  "  ['motivo', 'especialidade', 'profissional', 'diagnostico'].forEach(campo =>",
+                  "    pm.expect(pedidos[0]).to.not.have.property(campo));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenLab}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/laboratorio/pedidos",
+              "host": ["{{baseUrl}}"],
+              "path": ["laboratorio", "pedidos"]
+            },
+            "description": "APONTAR o que a resposta TEM: consulta_id, paciente, data_hora, exames_solicitados.\n\nE o que ela NAO tem: o motivo da consulta ('dor no peito'), a especialidade, quem e a profissional, o diagnostico. O laboratorio nao precisa saber por que o exame foi pedido para executa-lo. Minimizacao de dados, LGPD art. 6, III."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. NEGA — o parceiro fora do contrato (4:15)",
+      "item": [
+        {
+          "name": "5.1 GET /consultas — com o token do LABORATORIO -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 - fora do contrato do parceiro', () => pm.response.to.have.status(403));",
+                  "pm.test('token valido, porem sem o escopo da rota', () => {",
+                  "  pm.expect(pm.response.json().detail).to.include('Escopo');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenLab}}" }],
+            "url": { "raw": "{{baseUrl}}/consultas", "host": ["{{baseUrl}}"], "path": ["consultas"] },
+            "description": "APONTAR o contraste com a pasta 3:\n  404 (pasta 3) = o escopo bastava, mas o recurso e de outra pessoa; o status precisa esconder ate a existencia do dado.\n  403 (aqui)    = o escopo nao esta no token; nao ha recurso especifico a esconder.\n\nFECHAMENTO: esse token e legitimo — assinado por esta API, dentro da validade, nao foi forjado. Ainda assim nao passa. Se a credencial do laboratorio vazar amanha, o atacante consegue no maximo a lista de exames a coletar. Nunca o prontuario, nunca o diagnostico, nunca a agenda clinica. O tamanho do incidente e limitado pelo contrato, nao pela confianca no parceiro."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Extras — fora do roteiro, para arguicao",
+      "item": [
+        {
+          "name": "E1 POST /consultas/{id}/prontuario — dado sensivel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 registrado (ou 409 se ja existe)', () => {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{tokenAna}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diagnostico\": \"Angina estavel\",\n  \"anotacoes\": \"Dor precordial aos esforcos, cede em repouso.\",\n  \"prescricao\": \"AAS 100mg/dia\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/consultas/{{consultaId}}/prontuario",
+              "host": ["{{baseUrl}}"],
+              "path": ["consultas", "{{consultaId}}", "prontuario"]
+            },
+            "description": "Diagnostico e dado pessoal SENSIVEL (LGPD art. 5, II). Escrever exige escopo consultas:write E ser a profissional dona da consulta.\n\nPara mostrar mass assignment barrado: acrescente \"criado_em\": \"2020-01-01T00:00:00\" ao corpo. Volta 422, porque o schema usa extra=forbid."
+          }
+        },
+        {
+          "name": "E2 GET /admin/usuarios — como MARIA -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 - escopo insuficiente', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenMaria}}" }],
+            "url": { "raw": "{{baseUrl}}/admin/usuarios", "host": ["{{baseUrl}}"], "path": ["admin", "usuarios"] },
+            "description": "BFLA: paciente nao alcanca rota administrativa. Mesmo 403 da pasta 5, por escopo ausente."
+          }
+        },
+        {
+          "name": "E3 GET /prontuarios/busca?termo=' OR 1=1 -- -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 - injecao barrada antes de tocar no banco', () => {",
+                  "  pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{tokenMaria}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/prontuarios/busca?termo=' OR 1=1 --",
+              "host": ["{{baseUrl}}"],
+              "path": ["prontuarios", "busca"],
+              "query": [{ "key": "termo", "value": "' OR 1=1 --" }]
+            },
+            "description": "A query ja e parametrizada; a whitelist por regex no Query(pattern=...) e defesa em profundidade, e rejeita o payload antes de chegar ao banco."
+          }
+        }
+      ]
+    }
+  ]
+}

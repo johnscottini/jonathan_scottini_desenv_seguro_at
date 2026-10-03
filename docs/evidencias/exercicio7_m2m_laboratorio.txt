@@ -1,0 +1,57 @@
+# Exercício 7 — evidências reais (uvicorn app.main:app, curl)
+# Gerado em 2026-09-29 18:35. O client_secret vem do .env e não é impresso.
+# Preparação (não impressa): paciente maria, profissional dra.ana criada pelo admin após MFA.
+
+## 1. Profissional cria consulta com exames solicitados
+$ curl -s -X POST http://127.0.0.1:8000/consultas -H 'Authorization: Bearer <dra.ana>' -d '{"paciente":"maria",...,"motivo":"Dor no peito ao esforço","exames_solicitados":["Hemograma","Troponina"]}'
+{"id":1,"paciente":"Maria Souza","profissional":"Dra. Ana Costa","especialidade":"Cardiologia","data_hora":"2026-10-06T10:00:00","motivo":"Dor no peito ao esforço","status":"agendada","exames_solicitados":["Hemograma","Troponina"]}  → HTTP 201
+
+## 2. Client Credentials: laboratório obtém token
+$ curl -s -X POST http://127.0.0.1:8000/token/m2m -d grant_type=client_credentials -d client_id=laboratorio-parceiro -d client_secret=***
+{"access_token": "eyJhbGciOiJIUzI1NiIsInR5…(truncado)", "token_type": "bearer", "expires_in": 900, "scope": "exames:read exames:write"}
+# payload decodificado:
+{"sub": "laboratorio-parceiro", "tipo_cliente": "m2m", "escopos": ["exames:read", "exames:write"], "iss": "agendamento-api", "aud": "agendamento-api", "iat": 1790717717, "exp": 1790718617}
+# comparação — payload do token da profissional dra.ana:
+{"sub": "2108a0b516bd46cda06a712bb506925f", "tipo_cliente": "usuario", "papel": "profissional", "escopos": ["consultas:read", "consultas:write"], "iss": "agendamento-api", "aud": "agendamento-api", "iat": 1790717717, "exp": 1790719517}
+
+## 3. Pedindo escopo fora do contrato / credencial errada / grant errado
+$ curl ... -d scope='exames:read consultas:read'
+{"detail":"invalid_scope"}  → HTTP 400
+$ curl ... -d client_secret=errado
+{"detail":"invalid_client"}  → HTTP 401
+$ curl ... -d grant_type=password
+{"detail":[{"type":"string_pattern_mismatch","loc":["body","grant_type"],"msg":"String should match pattern '^client_credentials$'","input":"password","ctx":{"p
+
+## 4. O que o laboratório PODE fazer
+$ curl -s http://127.0.0.1:8000/laboratorio/pedidos -H 'Authorization: Bearer <laboratório>'
+[{"consulta_id":1,"paciente":"Maria Souza","data_hora":"2026-10-06T10:00:00","exames_solicitados":["Hemograma","Troponina"]}]  → HTTP 200
+# sem motivo, sem especialidade, sem profissional.
+$ curl -s -X POST http://127.0.0.1:8000/laboratorio/pedidos/1/resultados -H 'Authorization: Bearer <laboratório>' -d '{"exame":"Troponina","resultado":"0,01 ng/mL (referência < 0,04)"}'
+{"id":1,"consulta_id":1,"exame":"Troponina","resultado":"0,01 ng/mL (referência < 0,04)","laboratorio":"Laboratório Parceiro","recebido_em":"2026-09-29T21:35:18.268695Z"}  → HTTP 201
+$ (exame que não foi pedido)
+{"detail":"Exame não solicitado nesta consulta"}  → HTTP 422
+
+## 5. O que o laboratório NÃO pode fazer, mesmo com token válido
+$ curl -s -X GET http://127.0.0.1:8000/consultas -H 'Authorization: Bearer <laboratório>'
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+$ curl -s -X GET http://127.0.0.1:8000/consultas/1 -H 'Authorization: Bearer <laboratório>'
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+$ curl -s -X PUT http://127.0.0.1:8000/consultas/1 -H 'Authorization: Bearer <laboratório>'
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+$ curl -s -X DELETE http://127.0.0.1:8000/consultas/1 -H 'Authorization: Bearer <laboratório>'
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+$ curl -s -X GET http://127.0.0.1:8000/consultas/1/resultados -H 'Authorization: Bearer <laboratório>'
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+$ curl -s -X GET http://127.0.0.1:8000/admin/usuarios -H 'Authorization: Bearer <laboratório>'
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+$ curl -s -i http://127.0.0.1:8000/pagina/consultas -b 'sessao=<token do laboratório>'
+HTTP/1.1 303 See Other
+location: /pagina/login
+
+## 6. Profissional não usa as rotas do laboratório
+$ curl -s http://127.0.0.1:8000/laboratorio/pedidos -H 'Authorization: Bearer <dra.ana>'
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+
+## 7. O resultado chega ao profissional dono da consulta
+$ curl -s http://127.0.0.1:8000/consultas/1/resultados -H 'Authorization: Bearer <dra.ana>'
+[{"id":1,"consulta_id":1,"exame":"Troponina","resultado":"0,01 ng/mL (referência < 0,04)","laboratorio":"Laboratório Parceiro","recebido_em":"2026-09-29T21:35:18.268695Z"}]  → HTTP 200

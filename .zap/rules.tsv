@@ -1,0 +1,16 @@
+# OWASP ZAP baseline — política de regras do agendamento-api (Exercício 12).
+# Formato: <id da regra>	<WARN|FAIL|IGNORE>	<comentário opcional>
+# Gate: alertas de risco alto (High) do ZAP falham o job. Alguns alertas de baixo
+# risco/ruído conhecido são rebaixados a WARN com justificativa.
+
+# Anti-clickjacking: já mitigado por X-Frame-Options: DENY (Exercício 10). Mantido em
+# FAIL para pegar qualquer regressão de header.
+10020	FAIL	X-Frame-Options presente em todas as respostas (SecurityHeadersMiddleware)
+
+# CSP ausente: a app é uma API JSON + páginas server-side simples, sem front-end rico.
+# Rebaixado a WARN; a adoção de CSP está listada como risco residual no relatório final.
+10038	WARN	Content-Security-Policy — risco residual documentado (Exercício 13)
+
+# Cookie sem SameSite: o cookie de sessão usa SameSite=Strict; WARN cobre cookies
+# de terceiros que por acaso apareçam.
+10054	WARN

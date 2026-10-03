@@ -1,0 +1,79 @@
+# Exercício 6 — evidências reais (uvicorn app.main:app, curl)
+# Gerado em 2026-09-29 18:32. Tokens truncados; a senha do admin vem do .env e não é impressa.
+
+## 1. Cadastro público sempre cria paciente
+$ curl -s -X POST http://127.0.0.1:8000/usuarios -H 'Content-Type: application/json' -d '{"username":"maria","nome":"Maria Souza","password":"senha-forte-123"}'
+{"username":"maria","nome":"Maria Souza","papel":"paciente"}  → HTTP 201
+(joao cadastrado do mesmo jeito)
+$ curl ... -d '{"username":"intruso","nome":"X","password":"senha-forte-123","papel":"administrador"}'
+{"detail":[{"type":"extra_forbidden","loc":["body","papel"],"msg":"Extra inputs are not permitted","input":"administrador"}]}  → HTTP 422
+
+## 2. Login de administrador exige MFA
+$ curl -s -X POST http://127.0.0.1:8000/token -d username=admin -d password=***
+{"mfa_requerido": true, "mfa_token": "VvpvkoRPbYq6…", "mensagem": "Contas administrativas exigem segundo fator. Envie o código em POST /token/mfa.", "codigo_simulado": "299902"}
+$ curl -s -X POST http://127.0.0.1:8000/token/mfa -d mfa_token=… -d codigo=000000   (código errado)
+{"detail":"Código MFA inválido ou expirado"}  → HTTP 401
+$ curl -s -X POST http://127.0.0.1:8000/token/mfa -d mfa_token=… -d codigo=299902
+{"access_token":"eyJhbGciOiJIUzI1NiIsInR5…(truncado)","token_type":"bearer"}
+$ (mesmo código de novo — uso único)
+{"detail":"Código MFA inválido ou expirado"}  → HTTP 401
+
+## 3. Administrador cria os profissionais (único caminho para papéis privilegiados)
+$ curl -s -X POST http://127.0.0.1:8000/admin/usuarios -H 'Authorization: Bearer <admin>' -d '{"username":"dra.ana","nome":"Dra. Ana Costa","password":"***","papel":"profissional"}'
+{"username":"dra.ana","nome":"Dra. Ana Costa","papel":"profissional"}  → HTTP 201
+$ curl -s -X POST http://127.0.0.1:8000/admin/usuarios -H 'Authorization: Bearer <admin>' -d '{"username":"dr.paulo","nome":"Dr. Paulo Lima","password":"***","papel":"profissional"}'
+{"username":"dr.paulo","nome":"Dr. Paulo Lima","papel":"profissional"}  → HTTP 201
+
+## 4. Payload do JWT (decodificado sem verificar assinatura, como faria qualquer um no jwt.io)
+# ANA:
+{"sub": "03da03494dce4582ab3a74b311704a38", "tipo_cliente": "usuario", "papel": "profissional", "escopos": ["consultas:read", "consultas:write"], "iss": "agendamento-api", "aud": "agendamento-api", "iat": 1790717552, "exp": 1790719352}
+# MARIA:
+{"sub": "19857d60b40c4cd38b4dede74c621bfe", "tipo_cliente": "usuario", "papel": "paciente", "escopos": ["consultas:read"], "iss": "agendamento-api", "aud": "agendamento-api", "iat": 1790717553, "exp": 1790719353}
+# sub = id opaco (uuid), não o username; exp - iat = 1800s (30 min); iss/aud fixos.
+
+## 5. Senha errada e usuário inexistente respondem igual
+{"detail":"Usuário ou senha incorretos"}  → HTTP 401
+{"detail":"Usuário ou senha incorretos"}  → HTTP 401
+
+## 6. Rota restrita a administradores
+$ curl -s http://127.0.0.1:8000/admin/usuarios   (sem token)
+{"detail":"Not authenticated"}  → HTTP 401
+$ curl -s http://127.0.0.1:8000/admin/usuarios -H 'Authorization: Bearer <maria, paciente>'
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+$ curl -s http://127.0.0.1:8000/admin/usuarios -H 'Authorization: Bearer <dra.ana, profissional>'
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+$ curl -s http://127.0.0.1:8000/admin/usuarios -H 'Authorization: Bearer <admin, após MFA>'
+[{"username":"admin","nome":"Administrador","papel":"administrador"},{"username":"maria","nome":"Maria Souza","papel":"paciente"},{"username":"joao","nome":"João Pereira","papel":"paciente"},{"username":"dra.ana","nome":"Dra. Ana Costa","papel":"profissional"},{"username":"dr.paulo","nome":"Dr. Paulo Lima","papel":"profissional"}]  → HTTP 200
+
+## 7. Consultas com ownership
+$ curl -s -X POST http://127.0.0.1:8000/consultas -H 'Authorization: Bearer <dra.ana>' -d '{"paciente":"maria","especialidade":"Cardiologia","data_hora":"2026-10-06T10:00:00","motivo":"Dor no peito ao esforço"}'
+{"id":1,"paciente":"Maria Souza","profissional":"Dra. Ana Costa","especialidade":"Cardiologia","data_hora":"2026-10-06T10:00:00","motivo":"Dor no peito ao esforço","status":"agendada"}  → HTTP 201
+$ (paciente tentando criar consulta)
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+$ curl -s http://127.0.0.1:8000/consultas/1 -H 'Authorization: Bearer <maria, dona>'
+{"id":1,"paciente":"Maria Souza","profissional":"Dra. Ana Costa","especialidade":"Cardiologia","data_hora":"2026-10-06T10:00:00","motivo":"Dor no peito ao esforço","status":"agendada"}  → HTTP 200
+$ curl -s http://127.0.0.1:8000/consultas/1 -H 'Authorization: Bearer <joao, outro paciente>'
+{"detail":"Consulta não encontrada"}  → HTTP 404
+$ curl -s http://127.0.0.1:8000/consultas/999 -H 'Authorization: Bearer <joao>'   (inexistente: mesma resposta)
+{"detail":"Consulta não encontrada"}  → HTTP 404
+$ curl -s -X PUT http://127.0.0.1:8000/consultas/1 -H 'Authorization: Bearer <dr.paulo, outro profissional>' -d '{"status":"cancelada"}'
+{"detail":"Consulta não encontrada"}  → HTTP 404
+$ curl -s -X PUT http://127.0.0.1:8000/consultas/1 -H 'Authorization: Bearer <maria, paciente>' -d '{"status":"realizada"}'
+{"detail":"Escopo insuficiente para esta operação"}  → HTTP 403
+$ curl -s http://127.0.0.1:8000/consultas -H 'Authorization: Bearer <joao>'   (listagem filtrada)
+[]  → HTTP 200
+$ curl -s http://127.0.0.1:8000/consultas   (sem token)
+{"detail":"Not authenticated"}  → HTTP 401
+
+## 8. Sessão das páginas HTML
+$ curl -s -i http://127.0.0.1:8000/pagina/consultas   (sem sessão)
+HTTP/1.1 303 See Other
+location: /pagina/login
+$ curl -s -i -X POST http://127.0.0.1:8000/pagina/login -d username=maria -d password=***
+HTTP/1.1 303 See Other
+location: /pagina/consultas
+set-cookie: sessao=…(token truncado); HttpOnly; Max-Age=1800; Path=/pagina; SameSite=strict
+$ curl -s http://127.0.0.1:8000/pagina/consultas/1 -b 'sessao=<maria>'
+  → HTTP 200
+$ curl -s http://127.0.0.1:8000/pagina/consultas/1 -b 'sessao=<joao>'
+{"detail":"Consulta não encontrada"}  → HTTP 404

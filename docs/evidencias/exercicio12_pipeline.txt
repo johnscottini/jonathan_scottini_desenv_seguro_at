@@ -1,0 +1,36 @@
+# Exercício 12 — evidências do pipeline (execução local das mesmas ferramentas do CI)
+# Gerado em 2026-09-29 19:03.
+
+## SCA — pip-audit (análise de dependências)
+### ANTES (com PyJWT 2.13.0): o gate bloquearia o pipeline
+Found 1 known vulnerability in 1 package
+Name  Version ID              Fix Versions
+----- ------- --------------- ------------
+pyjwt 2.13.0  CVE-2026-102274 2.14.0
+
+### DEPOIS (PyJWT atualizado para 2.14.0): gate passa
+$ pip-audit -r requirements.txt --strict
+No known vulnerabilities found
+
+## SAST — bandit (análise estática do código)
+$ bandit -r app --severity-level high --confidence-level medium
+Test results:
+	No issues identified.
+Files skipped (0):
+
+$ bandit -r app  (resumo por severidade)
+Linhas: 980
+  HIGH: 0
+  MEDIUM: 0
+  LOW: 0
+
+## Testes de segurança — pytest
+$ pytest -q
+101 passed in 3.77s
+
+## Contagem dos testes de segurança por arquivo
+  test_autorizacao.py      27 tests collected in 0.02s
+  test_vulnerabilidades.py 10 tests collected in 0.01s
+  test_hardening.py        9 tests collected in 0.01s
+  test_threat_model.py     15 tests collected in 0.01s
+  test_laboratorio.py      18 tests collected in 0.01s

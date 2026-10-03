@@ -1,0 +1,46 @@
+# Exercício 11 — evidências reais (migração para SQLModel)
+# Gerado em 2026-09-29 18:59. Servidor: uvicorn app.main:app, banco SQLite em arquivo.
+
+## 1. Credenciais e URL do banco fora do código-fonte
+$ grep -rn "sqlite:///\|postgresql\|mysql" app/
+app/config.py:10:    database_url: str = "sqlite:///./agendamento.db"
+# Única ocorrência: o DEFAULT de dev em Settings, sobrescrito por DATABASE_URL no .env.
+# Nenhuma credencial (usuário/senha de banco) aparece no código-fonte.
+
+$ grep -n "database_url" app/config.py
+10:    database_url: str = "sqlite:///./agendamento.db"
+$ grep DATABASE_URL .env.example
+DATABASE_URL=sqlite:///./agendamento.db
+
+## 2. Nenhuma query montada por concatenação de string na camada de dados
+$ grep -rEn "f\"SELECT|f.'SELECT|\.format\(|SELECT .*%|execute\(" app/database/
+(nenhuma ocorrência — só select() do SQLModel, com valores vinculados)
+
+## 3. Sessão por injeção de dependência
+$ grep -rln "Depends(get_session)" app/routes/ | sort
+app/routes/admin.py
+app/routes/auth.py
+app/routes/consultas.py
+app/routes/laboratorio.py
+app/routes/paginas.py
+app/routes/prontuarios.py
+
+## 4. O banco persiste entre reinícios (dado não vive mais só em memória)
+$ curl -s -X POST 127.0.0.1:8000/consultas -H "Authorization: Bearer <dra.ana>" -d {paciente:maria, ...}
+{"id":1,"paciente":"Maria Souza","profissional":"Dra. Ana Costa","especialidade":"Cardiologia","data_hora":"2026-10-06T10:00:00","motivo":"Dor no peito","status":"agendada","exames_solicitados":["Hemograma"]}  → HTTP 201
+# reiniciando o processo do servidor...
+$ curl -s -X POST 127.0.0.1:8000/token -d username=dra.ana -d password=... (após reiniciar)
+# a conta dra.ana (criada antes do reinício) continua existindo → login OK
+$ curl -s 127.0.0.1:8000/consultas/1 -H "Authorization: Bearer <dra.ana>"   (a consulta sobreviveu)
+{"id":1,"paciente":"Maria Souza","profissional":"Dra. Ana Costa","especialidade":"Cardiologia","data_hora":"2026-10-06T10:00:00","motivo":"Dor no peito","status":"agendada","exames_solicitados":["Hemograma"]}  → HTTP 200
+
+## 5. Conteúdo real do arquivo de banco (sqlite3), provando a persistência
+$ sqlite3 agendamento.db ".tables"
+clientes_m2m      prontuarios       usuarios        
+consultas         resultados_exame
+$ sqlite3 agendamento.db "SELECT id, paciente, profissional, status FROM consultas"
+(1, 'Maria Souza', 'Dra. Ana Costa', 'agendada')
+$ SELECT username, papel FROM usuarios
+('admin', 'administrador')
+('maria', 'paciente')
+('dra.ana', 'profissional')

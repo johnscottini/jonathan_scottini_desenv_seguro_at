@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+*.db
+.DS_Store
+
+# Environment do Postman preenchido com segredos reais (ver docs/apresentacao/*.example.json)
+docs/apresentacao/*.postman_environment.json

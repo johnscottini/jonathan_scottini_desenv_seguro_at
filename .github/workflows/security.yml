@@ -79,20 +79,56 @@ jobs:
         with:
           python-version: "3.12"
       - name: Subir a aplicação
+        env:
+          # Segredos de CI, descartáveis: existem só para a app subir e o ZAP varrer.
+          SECRET_KEY: ci-secret-nao-usar-em-producao
+          ADMIN_PASSWORD: ci-admin-pass
+          LAB_CLIENT_SECRET: ci-lab-secret
+          COOKIE_SECURE: "false"
         run: |
           pip install -r requirements.txt
-          export SECRET_KEY=ci-secret-nao-usar-em-producao
-          export ADMIN_PASSWORD=ci-admin-pass
-          export LAB_CLIENT_SECRET=ci-lab-secret
-          export COOKIE_SECURE=false
-          nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-          sleep 5
+          # setsid + stdin fechada: o processo sai da árvore do passo, senão o runner
+          # o mata ao fim do step e o ZAP encontra connection refused no passo seguinte.
+          setsid nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 \
+            > uvicorn.log 2>&1 < /dev/null &
+          # Espera a app responder de fato, em vez de apostar num sleep fixo.
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/ > /dev/null; then
+              echo "aplicação no ar após ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "a aplicação não subiu em 30s; log do uvicorn:"
+          cat uvicorn.log
+          exit 1
+
+      - name: Confirmar que a aplicação sobreviveu ao fim do passo anterior
+        # Diagnóstico: se falhar AQUI, o processo morreu na fronteira entre steps.
+        # Se o passo anterior é que falhou, a app nunca subiu. São causas diferentes.
+        run: |
+          curl -sf http://localhost:8000/ || {
+            echo "a aplicação não está mais no ar; log do uvicorn:"
+            cat uvicorn.log
+            exit 1
+          }
+
+      - name: Liberar escrita do container do ZAP no workspace
+        # O container roda com outro uid e precisa gravar zap.yaml e os relatórios aqui.
+        run: chmod -R a+w "$GITHUB_WORKSPACE"
+
       - name: OWASP ZAP — scan passivo (baseline)
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: "http://localhost:8000"
-          # -I: não falha o job por warnings; o gate de High fica no rules.tsv.
+          # -a: inclui também os alertas informativos no relatório.
           cmd_options: "-a"
+          # O job tem permissions: contents:read, então não pode abrir issue.
+          allow_issue_writing: false
+
+      - name: Log do uvicorn (se o ZAP falhar)
+        if: failure()
+        run: cat uvicorn.log || true
 
 # Observação sobre IAST (análise interativa): exigiria instrumentar o runtime da app
 # durante os testes funcionais (um agente dentro do processo, correlacionando fluxo de

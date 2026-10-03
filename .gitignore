@@ -8,3 +8,4 @@ __pycache__/
 
 # Environment do Postman preenchido com segredos reais (ver docs/apresentacao/*.example.json)
 docs/apresentacao/*.postman_environment.json
+uvicorn.log

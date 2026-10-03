@@ -116,12 +116,11 @@ jobs:
             exit 1
           }
 
-      - name: Liberar escrita do container do ZAP no workspace
-        # O container roda com outro uid e precisa gravar zap.yaml e os relatórios aqui.
-        run: chmod -R a+w "$GITHUB_WORKSPACE"
-
+      # v0.15.0 e não v0.12.0 por dois motivos, ambos vividos neste pipeline:
+      #   v0.13.0 — permite ao container gravar no workspace (o Permission denied em zap.yaml)
+      #   v0.14.0 — para de usar o upload-artifact descontinuado (o HTTP 400 no upload)
       - name: OWASP ZAP — scan passivo (baseline)
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           target: "http://localhost:8000"
           # -a: inclui também os alertas informativos no relatório.

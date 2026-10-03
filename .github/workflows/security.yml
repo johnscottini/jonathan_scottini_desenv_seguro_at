@@ -81,7 +81,10 @@ jobs:
       - name: Subir a aplicação
         env:
           # Segredos de CI, descartáveis: existem só para a app subir e o ZAP varrer.
+          # Precisa cobrir TODOS os campos sem default do Settings (app/config.py), porque
+          # aqui não existe .env. Faltar um derruba a app já no import, com ValidationError.
           SECRET_KEY: ci-secret-nao-usar-em-producao
+          ADMIN_USERNAME: admin
           ADMIN_PASSWORD: ci-admin-pass
           LAB_CLIENT_SECRET: ci-lab-secret
           COOKIE_SECURE: "false"
